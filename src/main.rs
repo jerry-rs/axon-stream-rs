@@ -40,9 +40,8 @@ async fn main() {
         .expect("Create database connection error");
 
     // Create tables based on registered models
-    db.push_schema()
-        .await
-        .expect("Create database schema error");
+    let _ = db.push_schema()
+        .await;
 
     // Create a user
     let _ = toasty::create!(User {
