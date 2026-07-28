@@ -1,0 +1,1 @@
+import{h as e}from"./createBaseUIEventDetails-DNqnJ_HJ.js";function t(t){return e(t,`base-ui`)}export{t};

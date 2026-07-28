@@ -1,0 +1,8 @@
+/target
+.DS_Store
+.idea
+.idea/
+/.idea
+.data
+axon.db
+axon.db-wal
