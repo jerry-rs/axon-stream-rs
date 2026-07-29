@@ -1,9 +1,9 @@
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
-use serde::Deserialize;
-use tracing::error;
 use crate::extractors::auth::Claims;
 use crate::handlers::ApiResponse;
 use crate::state::AppState;
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use serde::Deserialize;
+use tracing::error;
 
 #[derive(Deserialize)]
 pub(crate) struct AuthRefreshRequest {
@@ -11,9 +11,13 @@ pub(crate) struct AuthRefreshRequest {
 }
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct AuthRefreshResponse {
+    token_type: &'static str,
     access_token: String,
     refresh_token: String,
+    access_token_expires_in: i64,
+    refresh_token_expires_in: i64,
 }
 
 pub(crate) async fn auth_refresh_handler(
@@ -76,7 +80,11 @@ pub(crate) async fn auth_refresh_handler(
     };
 
     ApiResponse::success(AuthRefreshResponse {
+        token_type: "Bearer",
         access_token,
         refresh_token,
-    }).into_response()
+        access_token_expires_in: 3_600,
+        refresh_token_expires_in: 10_800,
+    })
+    .into_response()
 }

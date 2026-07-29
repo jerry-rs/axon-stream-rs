@@ -15,8 +15,11 @@ pub(crate) struct AuthLoginRequest {
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AuthLoginResponse {
+    token_type: &'static str,
     access_token: String,
     refresh_token: String,
+    access_token_expires_in: i64,
+    refresh_token_expires_in: i64,
 }
 
 pub(crate) async fn auth_login_handler(
@@ -70,7 +73,10 @@ pub(crate) async fn auth_login_handler(
     };
 
     ApiResponse::success(AuthLoginResponse {
+        token_type:"Bearer",
         access_token,
         refresh_token,
+        access_token_expires_in:3_600,
+        refresh_token_expires_in:10_800,
     }).into_response()
 }
