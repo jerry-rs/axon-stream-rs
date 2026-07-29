@@ -5,7 +5,7 @@ use crate::utils::resolve_and_validate_path;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use tower::ServiceExt;
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 use crate::handlers::ApiResponse;
 
 
@@ -177,6 +177,7 @@ async fn download_dir_stream(dir_path: &std::path::Path) -> axum::response::Resp
 }
 
 
+#[instrument(skip(state,request))]
 pub(crate) async fn entry_download_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
