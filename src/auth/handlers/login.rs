@@ -26,14 +26,25 @@ pub(crate) async fn auth_login_handler(
     State(mut state): State<AppState>,
     Json(req): Json<AuthLoginRequest>,
 ) -> impl IntoResponse {
-    if let Err(e) = User::filter_by_username(&req.username)
+    match User::filter_by_username(&req.username)
         .filter(User::fields().password().eq(&req.password))
         .first()
         .exec(&mut state.db)
-        .await{
-        error!("{:#?}", e);
-        return ApiResponse::error(StatusCode::UNAUTHORIZED, "invalid username or password")
+        .await
+    {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return ApiResponse::error(StatusCode::UNAUTHORIZED, "invalid username or password")
+                .into_response();
+        }
+        Err(e) => {
+            error!("{:#?}", e);
+            return ApiResponse::error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal server error",
+            )
             .into_response();
+        }
     }
     let access_exp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
