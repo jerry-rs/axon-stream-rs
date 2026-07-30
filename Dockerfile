@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # ---------------------------------------------------------------------------
 # 构建阶段：前端 (pnpm/Vite) + 后端 (cargo release)
 # build.rs 在 cargo build 时自动执行 `pnpm build`，dist/ 经 rust-embed
