@@ -32,10 +32,11 @@ async fn main() {
                 .pretty(),
         )
         .init();
-
+    let app_config = AppConfig::default();
+    info!("{:#?}", &app_config);
     let mut db = toasty::Db::builder()
         .models(toasty::models!(crate::*))
-        .connect("turso:./axon.db")
+        .connect(&app_config.database_url)
         .await
         .expect("Create database connection error");
 
@@ -51,8 +52,6 @@ async fn main() {
     .await
     .expect("Create user error");
 
-    let app_config = AppConfig::default();
-    info!("{:#?}", &app_config);
     let app_addr = format!("{}:{}", &app_config.ipv4, &app_config.port);
     let app_listener = tokio::net::TcpListener::bind(app_addr)
         .await

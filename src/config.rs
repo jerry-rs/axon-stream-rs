@@ -12,6 +12,20 @@ pub(crate) struct AppConfig {
         env = "APP_SERVER_DATA_DIR"
     )]
     pub(crate) data_dir: std::path::PathBuf,
+
+    #[arg(
+        long,
+        default_value_t = format!(
+            "turso:{}",
+            std::env::current_exe()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("axon.db")
+                .display()
+        )
+    )]
+    pub(crate) database_url: String,
 }
 
 impl Default for AppConfig {
