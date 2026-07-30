@@ -3,16 +3,21 @@
 # build.rs 在 cargo build 时自动执行 `pnpm build`，dist/ 经 rust-embed
 # 嵌入最终二进制，因此构建镜像需要同时具备 Rust 与 Node/pnpm 工具链。
 # ---------------------------------------------------------------------------
+
+# rust 镜像不含 Node.js，从官方 node 镜像拷贝工具链（随构建平台自动匹配架构）
+FROM node:24-bookworm-slim AS node
+
 FROM rust:1-bookworm AS builder
 WORKDIR /build
+
+COPY --from=node /usr/local /usr/local
 
 # aws-lc-rs (jsonwebtoken 的 crypto 后端) 编译需要 cmake + clang
 RUN apt-get update \
     && apt-get install -y --no-install-recommends cmake clang \
     && rm -rf /var/lib/apt/lists/*
 
-# 启用 pnpm（与 web/pnpm-lock.yaml 配套）
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install -g pnpm@latest
 
 # 先拷贝依赖清单单独安装，源码变化不触发重新安装（层缓存）
 COPY web/package.json web/pnpm-lock.yaml web/
