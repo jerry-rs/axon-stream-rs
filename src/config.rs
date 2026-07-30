@@ -23,7 +23,8 @@ pub(crate) struct AppConfig {
                 .unwrap()
                 .join("axon.db")
                 .display()
-        )
+        ),
+        env ="APP_SERVER_DATABASE_URL"
     )]
     pub(crate) database_url: String,
 }

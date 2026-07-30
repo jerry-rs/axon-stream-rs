@@ -242,7 +242,6 @@ dependencies = [
  "hmac",
  "jsonwebtoken",
  "jwalk",
- "mime_guess",
  "percent-encoding",
  "rust-embed",
  "serde",

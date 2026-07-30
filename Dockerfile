@@ -15,9 +15,10 @@ COPY --from=node /usr/local /usr/local
 # aws-lc-rs (jsonwebtoken 的 crypto 后端) 编译需要 cmake + clang
 RUN apt-get update \
     && apt-get install -y --no-install-recommends cmake clang \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g pnpm@latest
 
-RUN npm install -g pnpm@latest
+# RUN npm install -g pnpm@latest
 
 # 先拷贝依赖清单单独安装，源码变化不触发重新安装（层缓存）
 COPY web/package.json web/pnpm-lock.yaml web/
@@ -36,17 +37,19 @@ RUN cargo build --release --locked
 # ---------------------------------------------------------------------------
 FROM debian:bookworm-slim
 
-RUN useradd --create-home --uid 10001 axon
+# RUN useradd --create-home --uid 10001 axon
 WORKDIR /app
 
 COPY --from=builder /build/target/release/axons /usr/local/bin/axons
 
-RUN mkdir -p /data && chown -R axon:axon /app /data
-USER axon
+#RUN mkdir -p /data && chown -R axon:axon /app /data
+RUN mkdir -p /data
+# USER axon
 
 ENV APP_SERVER_IP=0.0.0.0 \
     APP_SERVER_PORT=1000 \
-    APP_SERVER_DATA_DIR=/data
+    APP_SERVER_DATA_DIR=/data \
+    APP_SERVER_DATABASE_URL=turso:/app/axon.db
 # 生产环境请务必显式覆盖 JWT_SECRET（代码默认值仅供开发）：
 #   docker run -e JWT_SECRET=<random-string> ...
 
@@ -59,4 +62,4 @@ EXPOSE 1000
 #     -v axon-files:/data \
 #     -v axon-db:/app \
 #     axon-stream-rs
-CMD ["axons"]
+CMD ["/usr/local/bin/axons"]
