@@ -226,13 +226,18 @@ async function rawRequest<T>(
 ): Promise<T> {
   const { body, skipAuth, headers, ...rest } = options;
 
-  // FormData 由浏览器自动生成带 boundary 的 Content-Type，不能手动设置
-  const isFormData = body instanceof FormData;
+  // FormData / Blob / ArrayBuffer / TypedArray 原样发送，不做 JSON 序列化；
+  // 这些原始体的 Content-Type 交由浏览器决定（FormData 自动带 boundary）
+  const isRawBody =
+    body instanceof FormData ||
+    body instanceof Blob ||
+    body instanceof ArrayBuffer ||
+    ArrayBuffer.isView(body);
 
   const finalHeaders: Record<string, string> = {
     ...(headers as Record<string, string> | undefined),
   };
-  if (body !== undefined && !isFormData) {
+  if (body !== undefined && !isRawBody) {
     finalHeaders["Content-Type"] = "application/json";
   }
   if (!skipAuth) {
@@ -248,8 +253,8 @@ async function rawRequest<T>(
     body:
       body === undefined
         ? undefined
-        : isFormData
-          ? body
+        : isRawBody
+          ? (body as BodyInit)
           : JSON.stringify(body),
   });
 

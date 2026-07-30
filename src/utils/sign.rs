@@ -33,11 +33,40 @@ pub fn now_secs() -> u64 {
         .as_secs()
 }
 
-pub(crate) fn generate_play_url(path: &str, uid: &str, secret: &str, ttl_secs: u64) -> String {
+/// URL 路径段编码集：在 CONTROLS 基础上额外编码会破坏 URL 结构的字符。
+/// 文件名可能含 '#'(fragment)、'?'(query)、'%'(解码错位) 等，必须逐段编码；
+/// 非 ASCII 字节由 utf8_percent_encode 统一编码。'-'、'_'、'.' 等保持可读。
+const PATH_SEGMENT_ENCODE_SET: &percent_encoding::AsciiSet = &percent_encoding::CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'%')
+    .add(b'?')
+    .add(b'`')
+    .add(b'{')
+    .add(b'}');
+
+/// 相对路径逐段 percent-encode，保留 '/' 层级；
+/// 服务端 Path<String> 提取时 percent-decode 还原，与签名计算的原始路径一致
+fn encode_path_segments(path: &str) -> String {
+    path.split('/')
+        .map(|seg| {
+            percent_encoding::utf8_percent_encode(seg, PATH_SEGMENT_ENCODE_SET).to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// 生成带过期时间与签名的相对 URL（{path}?expire&sign&uid），
+/// 供 video/image/download 等验签公开路由共用
+pub(crate) fn generate_signed_url(path: &str, uid: &str, secret: &str, ttl_secs: u64) -> String {
     let expire = now_secs() + ttl_secs;
     let sign = generate_sign(path, expire, uid, secret);
     format!(
         "{}?expire={}&sign={}&uid={}",
-        path, expire, sign, uid
+        encode_path_segments(path),
+        expire,
+        sign,
+        uid
     )
 }

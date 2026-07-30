@@ -35,13 +35,10 @@ export function HomePage() {
           className="hidden"
           onChange={handleFileChange}
         />
-        <Button
-          size="sm"
-          disabled={uploadMutation.isPending}
-          onClick={() => inputRef.current?.click()}
-        >
+        {/* 上传进度在 toast 中呈现，按钮保持可用以便继续排队上传 */}
+        <Button size="sm" onClick={() => inputRef.current?.click()}>
           <Upload />
-          {uploadMutation.isPending ? "Uploading…" : "Upload"}
+          Upload
         </Button>
       </div>
       <div className="bg-card rounded-lg border">

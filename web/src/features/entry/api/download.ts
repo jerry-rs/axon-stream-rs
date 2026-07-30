@@ -1,9 +1,4 @@
-import {
-  ApiError,
-  BASE_URL,
-  ensureFreshToken,
-  getAccessToken,
-} from "@/lib/api-client";
+import { ApiError, BASE_URL } from "@/lib/api-client";
 
 /** 并行下载的默认连接数 */
 const DEFAULT_CONCURRENCY = 6;
@@ -55,13 +50,15 @@ function resolveFilename(disposition: string | null): string | null {
   return plain ? plain[1].trim() : null;
 }
 
-function authHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-  const token = getAccessToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
+/**
+ * 签名下载地址持有者：/api/entry/download 是签名校验的公开路由，
+ * 地址有效期 600s，长下载中途过期时通过 refresh() 重新签名。
+ */
+interface SignedUrlRef {
+  /** 当前有效的完整 API 路径（含签名 query） */
+  value: string;
+  /** 重新签名并更新 value */
+  refresh: () => Promise<void>;
 }
 
 function triggerBrowserSave(blob: Blob, filename: string | null): void {
@@ -139,7 +136,7 @@ async function probeResource(
   signal?: AbortSignal,
 ): Promise<ProbeResult> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { ...authHeaders(), Range: "bytes=0-0" },
+    headers: { Range: "bytes=0-0" },
     signal,
   });
 
@@ -182,11 +179,11 @@ interface ChunkTask {
 
 /**
  * 按 chunkSize 切分，concurrency 个 worker 共享任务队列并行拉取。
- * 每个分块独立重试；遇到 401（长下载中 token 过期）先刷新再重放一次。
+ * 每个分块独立重试；遇到 403（长下载中签名过期）重新签名再重放一次。
  * sink 决定落点：内存数组缓冲或直接按 offset 写盘。
  */
 async function runChunkedDownload(
-  path: string,
+  url: SignedUrlRef,
   totalSize: number,
   options: Required<Pick<DownloadOptions, "concurrency" | "chunkSize">> &
     Pick<DownloadOptions, "onProgress" | "signal">,
@@ -203,15 +200,15 @@ async function runChunkedDownload(
 
     for (let attempt = 0; attempt < MAX_CHUNK_RETRIES; attempt += 1) {
       try {
-        const res = await fetch(`${BASE_URL}${path}`, {
-          headers: { ...authHeaders(), Range: `bytes=${start}-${end}` },
+        const res = await fetch(`${BASE_URL}${url.value}`, {
+          headers: { Range: `bytes=${start}-${end}` },
           signal,
         });
 
-        // token 在长时间下载中过期：刷新后重放（不计入重试次数）
-        if (res.status === 401 && attempt === 0) {
+        // 签名在长时间下载中过期：重新签名后重放（不计入重试次数）
+        if (res.status === 403 && attempt === 0) {
           await res.body?.cancel().catch(() => undefined);
-          await ensureFreshToken();
+          await url.refresh();
           attempt -= 1;
           continue;
         }
@@ -268,10 +265,7 @@ async function downloadWhole(
   onProgress?: DownloadOptions["onProgress"],
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: authHeaders(),
-    signal,
-  });
+  const res = await fetch(`${BASE_URL}${path}`, { signal });
   if (!res.ok) {
     throw new ApiError(
       `Download failed with status ${res.status}`,
@@ -302,14 +296,14 @@ async function downloadWhole(
 
 /** 分段并行下载到内存，组装 Blob 后保存（峰值内存 = 文件大小） */
 async function downloadChunkedToMemory(
-  path: string,
+  url: SignedUrlRef,
   totalSize: number,
   filename: string | null,
   options: Required<Pick<DownloadOptions, "concurrency" | "chunkSize">> &
     Pick<DownloadOptions, "onProgress" | "signal">,
 ): Promise<void> {
   const buffers = new Array<ArrayBuffer>(Math.ceil(totalSize / options.chunkSize));
-  await runChunkedDownload(path, totalSize, options, ({ index, buffer }) => {
+  await runChunkedDownload(url, totalSize, options, ({ index, buffer }) => {
     buffers[index] = buffer;
   });
   triggerBrowserSave(new Blob(buffers), filename);
@@ -326,10 +320,7 @@ async function streamWholeToDisk(
   onProgress?: DownloadOptions["onProgress"],
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: authHeaders(),
-    signal,
-  });
+  const res = await fetch(`${BASE_URL}${path}`, { signal });
   if (!res.ok) {
     throw new ApiError(
       `Download failed with status ${res.status}`,
@@ -362,7 +353,7 @@ async function streamWholeToDisk(
  */
 async function tryDownloadToDisk(
   handle: FileSystemFileHandle,
-  path: string,
+  url: SignedUrlRef,
   /** 分段落盘时的总大小；null 表示单流落盘 */
   totalSize: number | null,
   options: Required<Pick<DownloadOptions, "concurrency" | "chunkSize">> &
@@ -378,11 +369,16 @@ async function tryDownloadToDisk(
   try {
     if (totalSize !== null) {
       // 分块按 offset 定位写入，内存占用仅为 并发数 × 分块大小
-      await runChunkedDownload(path, totalSize, options, ({ start, buffer }) =>
+      await runChunkedDownload(url, totalSize, options, ({ start, buffer }) =>
         writable.write({ type: "write", position: start, data: buffer }),
       );
     } else {
-      await streamWholeToDisk(writable, path, options.onProgress, options.signal);
+      await streamWholeToDisk(
+        writable,
+        url.value,
+        options.onProgress,
+        options.signal,
+      );
     }
     await writable.close();
     return true;
@@ -397,23 +393,28 @@ async function tryDownloadToDisk(
 /* ------------------------------------------------------------------ */
 
 /**
- * 下载受保护资源：带 token 请求，转 blob / 本地文件保存。
- * 下载接口返回二进制而非 JSON 信封，不能走 request()；
- * 也不能用 <a href> 直接跳转（不会带 Authorization 头）。
+ * 下载资源：urlProvider 换取 600s 签名地址（/api/entry/get-download-url），
+ * 再从签名校验的公开路由 /api/entry/download 拉取，转 blob / 本地文件保存。
+ * 下载接口返回二进制而非 JSON 信封，不能走 request()。
  * 文件名取自响应的 Content-Disposition 头。
  *
  * 下载策略（按优先级）：
- * 1. 大文件 / 目录 tar 流且浏览器支持 File System Access API：
- *    弹「另存为」选择框，分块按 offset 直接写盘（流式落盘，
- *    内存占用 = 并发数 × 分块大小，与文件大小无关）；
- * 2. 不支持写盘时回退内存：支持 Range 的大文件分段并行拉取，
- *    组装 Blob 保存（峰值内存 = 文件大小）；
+ * 1. 浏览器支持 File System Access API：一律弹「另存为」选择框落盘。
+ *    大文件分块按 offset 写盘（内存占用 = 并发数 × 分块大小），
+ *    小文件/目录 tar 流单流写盘；completed 的时机 = 写盘真正结束，
+ *    成功提示不会早于用户点 Save；
+ * 2. API 不可用（如 Firefox）回退内存：支持 Range 的大文件分段并行拉取，
+ *    组装 Blob 交浏览器下载（峰值内存 = 文件大小）；
  * 3. 其余（小文件、不支持 Range）：单流下载。
+ *    回退路径的完成时机 = 字节移交浏览器，无法感知浏览器自身的保存对话框。
  */
+/** 下载结果：completed 正常落地；cancelled 用户在「另存为」选择框主动取消 */
+export type DownloadOutcome = "completed" | "cancelled";
+
 export async function downloadFile(
-  path: string,
+  urlProvider: () => Promise<string>,
   options: DownloadOptions = {},
-): Promise<void> {
+): Promise<DownloadOutcome> {
   const {
     concurrency = DEFAULT_CONCURRENCY,
     chunkSize = DEFAULT_CHUNK_SIZE,
@@ -422,37 +423,43 @@ export async function downloadFile(
   } = options;
   const chunkOptions = { concurrency, chunkSize, onProgress, signal };
 
-  await ensureFreshToken();
+  // 签名有效期 600s；分块请求拿到 403 时通过 refresh 重新签名续期
+  const url: SignedUrlRef = {
+    value: await urlProvider(),
+    refresh: async () => {
+      url.value = await urlProvider();
+    },
+  };
 
-  const probe = await probeResource(path, signal);
+  const probe = await probeResource(url.value, signal);
   const totalSize = probe.totalSize;
   const canChunk =
     probe.supportsRange && totalSize !== null && totalSize > chunkSize;
-  // 大文件走分段落盘；无 Content-Length 的流（目录 tar）走单流落盘
-  const preferDisk = canChunk || totalSize === null;
 
-  if (preferDisk) {
+  // 有 File System Access API 一律走选择框落盘，保证 completed 时机 = 写盘结束
+  if (getSaveFilePicker() !== null) {
     const picked = await pickSaveTarget(probe.filename);
     if (picked === PICK_CANCELLED) {
-      return;
+      return "cancelled";
     }
     if (picked !== null) {
       const done = await tryDownloadToDisk(
         picked,
-        path,
+        url,
         canChunk ? totalSize : null,
         chunkOptions,
       );
       if (done) {
-        return;
+        return "completed";
       }
     }
   }
 
   if (canChunk) {
-    await downloadChunkedToMemory(path, totalSize, probe.filename, chunkOptions);
-    return;
+    await downloadChunkedToMemory(url, totalSize, probe.filename, chunkOptions);
+    return "completed";
   }
 
-  await downloadWhole(path, probe.filename, onProgress, signal);
+  await downloadWhole(url.value, probe.filename, onProgress, signal);
+  return "completed";
 }

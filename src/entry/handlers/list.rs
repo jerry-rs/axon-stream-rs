@@ -70,6 +70,10 @@ pub(crate) async fn entry_list_handler(
                 if name.eq_ignore_ascii_case(".") || name.eq_ignore_ascii_case("..") {
                     continue;
                 }
+                // 分片上传会话目录属内部实现，不对外展示
+                if name == super::upload::UPLOAD_TMP_DIR {
+                    continue;
+                }
                 let ext = entry
                     .path()
                     .extension()

@@ -13,3 +13,16 @@ export function isVideoEntry(item: EntryItem): boolean {
   }
   return VIDEO_EXTS.has(item.ext.toLowerCase().replace(/^\./, ""));
 }
+
+/** 图片扩展名集合（浏览器 <img> 可渲染的格式；heic/raw 等不在内） */
+export const IMAGE_EXTS: ReadonlySet<string> = new Set([
+  "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "ico", "avif",
+]);
+
+/** 是否为可查看的图片文件（普通文件 + 图片扩展名） */
+export function isImageEntry(item: EntryItem): boolean {
+  if (item.entryType !== "f") {
+    return false;
+  }
+  return IMAGE_EXTS.has(item.ext.toLowerCase().replace(/^\./, ""));
+}

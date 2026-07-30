@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, MoreHorizontal, Play, Trash2 } from "lucide-react";
+import { Download, Eye, MoreHorizontal, Play, Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import type { EntryItem } from "@/features/entry/api/entry";
 import { EntryIcon } from "@/features/entry/components/entry-icon";
+import { EntryImage } from "@/features/entry/components/entry-image";
 import { EntryVideo } from "@/features/entry/components/entry-video";
 import { useDeleteEntry } from "@/features/entry/hooks/use-delete-entry";
 import { useDownloadEntry } from "@/features/entry/hooks/use-download-entry";
@@ -37,7 +38,7 @@ import {
   formatSize,
   formatTime,
 } from "@/features/entry/utils/format";
-import { isVideoEntry } from "@/features/entry/utils/media";
+import { isImageEntry, isVideoEntry } from "@/features/entry/utils/media";
 
 const COLUMN_COUNT = 9;
 
@@ -54,6 +55,8 @@ export function EntryTable({ currentPath, onPathChange }: EntryTableProps) {
   const [pendingDelete, setPendingDelete] = useState<EntryItem | null>(null);
   /** 正在播放的视频完整相对路径；null 表示播放器关闭 */
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
+  /** 正在查看的图片完整相对路径；null 表示查看器关闭 */
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   function confirmDelete() {
     if (!pendingDelete) return;
@@ -122,6 +125,7 @@ export function EntryTable({ currentPath, onPathChange }: EntryTableProps) {
               ? `${currentPath}/${item.name}`
               : item.name;
             const isVideo = isVideoEntry(item);
+            const isImage = isImageEntry(item);
             return (
             <TableRow key={item.name}>
               <TableCell className="text-muted-foreground text-center">
@@ -144,6 +148,16 @@ export function EntryTable({ currentPath, onPathChange }: EntryTableProps) {
                     title={item.name}
                     className="inline-flex max-w-56 cursor-pointer items-center gap-2 font-medium hover:underline sm:max-w-72 lg:max-w-96"
                     onClick={() => setPlayingVideo(fullPath)}
+                  >
+                    <EntryIcon item={item} />
+                    <span className="truncate">{item.name}</span>
+                  </button>
+                ) : isImage ? (
+                  <button
+                    type="button"
+                    title={item.name}
+                    className="inline-flex max-w-56 cursor-pointer items-center gap-2 font-medium hover:underline sm:max-w-72 lg:max-w-96"
+                    onClick={() => setViewingImage(fullPath)}
                   >
                     <EntryIcon item={item} />
                     <span className="truncate">{item.name}</span>
@@ -181,7 +195,7 @@ export function EntryTable({ currentPath, onPathChange }: EntryTableProps) {
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <Button variant="ghost" size="icon-sm" title="操作" />
+                      <Button variant="ghost" size="icon-sm" title="Actions" />
                     }
                   >
                     <MoreHorizontal />
@@ -191,6 +205,12 @@ export function EntryTable({ currentPath, onPathChange }: EntryTableProps) {
                       <DropdownMenuItem onClick={() => setPlayingVideo(fullPath)}>
                         <Play />
                         Play
+                      </DropdownMenuItem>
+                    )}
+                    {isImage && (
+                      <DropdownMenuItem onClick={() => setViewingImage(fullPath)}>
+                        <Eye />
+                        View
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
@@ -219,6 +239,11 @@ export function EntryTable({ currentPath, onPathChange }: EntryTableProps) {
       <EntryVideo
         path={playingVideo}
         onClose={() => setPlayingVideo(null)}
+      />
+
+      <EntryImage
+        path={viewingImage}
+        onClose={() => setViewingImage(null)}
       />
 
       <AlertDialog
