@@ -1,0 +1,10 @@
+.git
+target
+web/node_modules
+dist
+axon.db
+axon.db-wal
+.data
+.idea
+Dockerfile
+.dockerignore
