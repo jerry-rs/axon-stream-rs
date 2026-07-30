@@ -18,7 +18,7 @@ mod routers;
 mod state;
 mod utils;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 8)]
 async fn main() {
     tracing_subscriber::registry()
         .with(
@@ -40,8 +40,7 @@ async fn main() {
         .expect("Create database connection error");
 
     // Create tables based on registered models
-    let _ = db.push_schema()
-        .await;
+    let _ = db.push_schema().await;
 
     // Create a user
     let _ = toasty::create!(User {
@@ -61,7 +60,7 @@ async fn main() {
 
     let app_state = AppState {
         config: Arc::new(app_config),
-        db:db,
+        db: db,
     };
     let app_routers = build_global_routers(app_state);
     axum::serve(
