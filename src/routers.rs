@@ -2,9 +2,13 @@ use crate::auth::routers::{build_auth_protected_routers, build_auth_public_route
 use crate::entry::routers::{build_entry_protected_routers, build_entry_public_routers};
 use crate::middlewares::auth::auth_middleware;
 use crate::state::AppState;
+use crate::utils::extract_client_ip;
+use axum::body::Body;
+use axum::extract::{ConnectInfo, MatchedPath};
+use axum::http::{Request, Response, Uri};
 use axum::{Router, middleware};
-use axum::http::Uri;
-
+use std::time::Duration;
+use tracing::Span;
 #[derive(rust_embed::Embed)]
 #[folder = "dist/"]
 struct Assets;
@@ -56,7 +60,6 @@ async fn static_handler(uri: Uri) -> axum::response::Response {
     }
 }
 
-
 fn build_protected_routers() -> Router<AppState> {
     Router::new()
         .merge(build_entry_protected_routers())
@@ -74,5 +77,55 @@ pub(crate) fn build_global_routers(state: AppState) -> Router {
         .merge(build_protected_routers())
         .merge(build_public_routers())
         .fallback(static_handler)
+        .layer(
+            tower_http::trace::TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<Body>| {
+                    // request-id 由外层 SetRequestIdLayer 已经写入 header,这里直接读
+                    let request_id = request
+                        .headers()
+                        .get("x-request-id")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("unknown")
+                        .to_string();
+
+                    let matched_path = request
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(|p| p.as_str())
+                        .unwrap_or_else(|| request.uri().path());
+
+                    let ip = request
+                        .extensions()
+                        .get::<ConnectInfo<std::net::SocketAddr>>()
+                        .map(|ci| extract_client_ip(request.headers(), &ci.0))
+                        .unwrap_or_else(|| "unknown".to_string());
+
+                    tracing::span!(
+                        tracing::Level::INFO,
+                        "http_request",
+                        request_id = %request_id,
+                        method = %request.method(),
+                        path = %matched_path,
+                        ip = %ip,
+                        user_agent = request
+                            .headers()
+                            .get("user-agent")
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or(""),
+                        status = tracing::field::Empty,
+                        latency_ms = tracing::field::Empty,
+                    )
+                })
+                .on_response(
+                    |response: &Response<Body>, latency: Duration, span: &Span| {
+                        span.record("status", response.status().as_u16());
+                        span.record("latency_ms", latency.as_millis() as u64);
+                        tracing::info!(parent: span, "request completed");
+                    },
+                ),
+        )
+        .layer(tower_http::request_id::SetRequestIdLayer::x_request_id(
+            tower_http::request_id::MakeRequestUuid,
+        ))
         .with_state(state)
 }

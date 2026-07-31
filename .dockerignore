@@ -8,3 +8,4 @@ axon.db-wal
 .idea
 Dockerfile
 .dockerignore
+logs

@@ -15,10 +15,10 @@ pub(crate) async fn entry_delete_handler(
         Err(e) => return e.into_response(),
     };
 
-    let result = if safe_path.is_dir() {
-        tokio::fs::remove_dir_all(&safe_path).await
-    } else {
-        tokio::fs::remove_file(&safe_path).await
+    let result = match tokio::fs::metadata(&safe_path).await {
+        Ok(meta) if meta.is_dir() => tokio::fs::remove_dir_all(&safe_path).await,
+        Ok(_) => tokio::fs::remove_file(&safe_path).await,
+        Err(e) => Err(e),
     };
 
     match result {

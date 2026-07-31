@@ -25,9 +25,10 @@ toasty = { version = "0.9", features = ["turso"] }
 tokio = { version = "1.53.1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["io", "io-util"] }
 tower = { version = "0.5" }
-tower-http = { version = "0.7", features = ["fs"] }
+tower-http = { version = "0.7", features = ["fs", "trace", "request-id"] }
 tracing = { version = "0.1.44" }
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tracing-appender = { version = "0.2.5" }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 
 [build-dependencies]
 walkdir = "2.5.0"

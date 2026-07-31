@@ -6,3 +6,4 @@
 .data
 axon.db
 axon.db-wal
+logs
