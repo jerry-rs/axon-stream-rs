@@ -70,6 +70,7 @@ fn build_public_routers() -> Router<AppState> {
     Router::new()
         .merge(build_auth_public_routers())
         .merge(build_entry_public_routers())
+        .route("/health", axum::routing::get(|| async { "healthy" }))
 }
 
 pub(crate) fn build_global_routers(state: AppState) -> Router {

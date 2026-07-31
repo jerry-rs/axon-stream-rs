@@ -43,13 +43,13 @@ WORKDIR /app
 COPY --from=builder /build/target/release/axons /usr/local/bin/axons
 
 #RUN mkdir -p /data && chown -R axon:axon /app /data
-RUN mkdir -p /data
+RUN mkdir -p /data /app/db
 # USER axon
 
 ENV APP_SERVER_IP=0.0.0.0 \
     APP_SERVER_PORT=1000 \
     APP_SERVER_DATA_DIR=/data \
-    APP_SERVER_DATABASE_URL=turso:/app/axon.db
+    APP_SERVER_DATABASE_URL=turso:/app/db/axon.db
 # 生产环境请务必显式覆盖 JWT_SECRET（代码默认值仅供开发）：
 #   docker run -e JWT_SECRET=<random-string> ...
 
