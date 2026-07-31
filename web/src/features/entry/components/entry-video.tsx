@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { Loader2, X } from "lucide-react";
 import { BASE_URL } from "@/lib/api-client";
 import { useVideoPlayUrl } from "@/features/entry/hooks/use-video-play-url";
@@ -17,6 +17,22 @@ interface EntryVideoProps {
  */
 export function EntryVideo({ path, onClose }: EntryVideoProps) {
   const { data: playUrl, isPending, error } = useVideoPlayUrl(path);
+
+  // 被移出 DOM 的 <video> 不会自动停止，卸载前必须显式 pause 并清空 src，
+  // 否则关闭弹窗后仍在后台发声/缓冲，直到被 GC。useCallback 固定回调身份，
+  // 避免重渲染导致 ref 清理函数反复执行。
+  const handleVideoRef = useCallback((element: HTMLVideoElement | null) => {
+    if (!element) {
+      return;
+    }
+    element.defaultPlaybackRate = 1.25;
+    element.playbackRate = 1.25;
+    return () => {
+      element.pause();
+      element.removeAttribute("src");
+      element.load();
+    };
+  }, []);
 
   useEffect(() => {
     if (path === null) {
@@ -68,7 +84,12 @@ export function EntryVideo({ path, onClose }: EntryVideoProps) {
             <p className="text-destructive p-8 text-sm">{error.message}</p>
           )}
           {src && (
-            <video src={src} controls className="max-h-[75vh] w-full" />
+            <video
+              ref={handleVideoRef}
+              src={src}
+              controls
+              className="max-h-[75vh] w-full"
+            />
           )}
         </div>
       </div>
