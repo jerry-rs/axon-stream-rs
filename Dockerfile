@@ -40,7 +40,7 @@ FROM debian:bookworm-slim
 # RUN useradd --create-home --uid 10001 axon
 WORKDIR /app
 
-COPY --from=builder /build/target/release/axons /usr/local/bin/axons
+COPY --from=builder /build/target/release/axons /app/axons
 
 #RUN mkdir -p /data && chown -R axon:axon /app /data
 RUN mkdir -p /data /app/db
@@ -62,4 +62,4 @@ EXPOSE 1000
 #     -v axon-files:/data \
 #     -v axon-db:/app \
 #     axon-stream-rs
-CMD ["/usr/local/bin/axons"]
+CMD ["/app/axons"]
