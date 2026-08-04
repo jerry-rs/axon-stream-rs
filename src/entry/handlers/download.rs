@@ -58,7 +58,7 @@ async fn download_file_stream(
         .and_then(|n| n.to_str())
         .unwrap_or("download");
 
-    match tower_http::services::ServeFile::new(&download_path)
+    match tower_http::services::ServeFile::new(download_path)
         .oneshot(request)
         .await
     {
@@ -188,7 +188,7 @@ pub struct DownloadQuery {
 }
 
 #[instrument(skip(state, request))]
-pub(crate) async fn entry_download_handler(
+pub(crate) async fn download_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
     axum::extract::Query(query): axum::extract::Query<DownloadQuery>,
@@ -233,7 +233,7 @@ pub(crate) async fn entry_download_handler(
 }
 
 #[instrument]
-pub(crate) async fn entry_download_url_handler(
+pub(crate) async fn download_url_handler(
     axum::extract::Path(path): axum::extract::Path<String>,
     payload: AuthPayload,
 ) -> impl IntoResponse {
@@ -241,12 +241,8 @@ pub(crate) async fn entry_download_url_handler(
     if !has_permission {
         return ApiResponse::error(StatusCode::FORBIDDEN, "no permission").into_response();
     }
-    let download_url = generate_signed_url(
-        path.as_str(),
-        &payload.claims.sub,
-        DOWNLOAD_URL_SECRET,
-        600,
-    );
+    let download_url =
+        generate_signed_url(path.as_str(), &payload.claims.sub, DOWNLOAD_URL_SECRET, 600);
     info!("{download_url}");
     ApiResponse::success(download_url).into_response()
 }

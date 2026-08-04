@@ -90,7 +90,7 @@ async fn main() {
 
     let app_state = AppState {
         config: Arc::new(app_config),
-        db: db,
+        db,
     };
     let app_routers = build_global_routers(app_state);
     axum::serve(

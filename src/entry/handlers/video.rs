@@ -11,7 +11,6 @@ use tracing::{error, info, instrument};
 /// 视频播放通道独立 secret：与图片/下载签名不互通
 const VIDEO_PLAY_URL_SECRET: &str = "video-play-url-secret";
 
-
 #[derive(Deserialize, Debug)]
 pub struct VideoStreamQuery {
     expire: u64,
@@ -20,7 +19,7 @@ pub struct VideoStreamQuery {
 }
 
 #[instrument(skip(state, request))]
-pub(crate) async fn entry_video_stream_handler(
+pub(crate) async fn video_stream_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
     axum::extract::Query(query): axum::extract::Query<VideoStreamQuery>,
@@ -60,7 +59,7 @@ pub(crate) async fn entry_video_stream_handler(
 }
 
 #[instrument]
-pub(crate) async fn entry_video_play_url_handler(
+pub(crate) async fn video_play_url_handler(
     axum::extract::Path(path): axum::extract::Path<String>,
     payload: AuthPayload,
 ) -> impl IntoResponse {

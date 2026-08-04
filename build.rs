@@ -1,4 +1,4 @@
-const FRONTEND_RELATIVE_DIR: &'static str = "web";
+const FRONTEND_RELATIVE_DIR: &str = "web";
 
 fn main() {
     let current_dir = std::env::current_dir().unwrap();

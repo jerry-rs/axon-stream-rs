@@ -47,7 +47,7 @@ fn file_type_str(meta: &std::fs::Metadata) -> &'static str {
 }
 
 #[instrument(skip(state))]
-pub(crate) async fn entry_list_handler(
+pub(crate) async fn list_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     option_path: Option<axum::extract::Path<String>>,
 ) -> impl IntoResponse {
@@ -113,10 +113,11 @@ pub(crate) async fn entry_list_handler(
             .into_response();
         }
     }
-    items.sort_by(|a, b|
-        a.entry_type.cmp(&b.entry_type)
+    items.sort_by(|a, b| {
+        a.entry_type
+            .cmp(&b.entry_type)
             .then_with(|| a.name.cmp(&b.name))
             .then_with(|| a.modified.cmp(&b.modified).reverse())
-    );
-    ApiResponse::success(ListResponse { items}).into_response()
+    });
+    ApiResponse::success(ListResponse { items }).into_response()
 }

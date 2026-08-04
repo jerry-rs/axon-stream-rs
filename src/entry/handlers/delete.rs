@@ -6,7 +6,7 @@ use axum::response::IntoResponse;
 use tracing::{error, info, instrument};
 
 #[instrument(skip(state))]
-pub(crate) async fn entry_delete_handler(
+pub(crate) async fn delete_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
 ) -> impl IntoResponse {

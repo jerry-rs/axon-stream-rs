@@ -88,7 +88,10 @@ async fn load_meta(dir: &std::path::Path) -> Result<UploadMeta, ApiResponse<()>>
     })?;
     serde_json::from_slice(&bytes).map_err(|e| {
         error!("parse upload meta failed: {e}");
-        ApiResponse::error(StatusCode::INTERNAL_SERVER_ERROR, "corrupted upload session")
+        ApiResponse::error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "corrupted upload session",
+        )
     })
 }
 
@@ -120,7 +123,9 @@ async fn cleanup_stale_sessions(data_dir: std::path::PathBuf) {
         Err(_) => return,
     };
     while let Ok(Some(entry)) = entries.next_entry().await {
-        let Ok(file_type) = entry.file_type().await else { continue };
+        let Ok(file_type) = entry.file_type().await else {
+            continue;
+        };
         if !file_type.is_dir() {
             continue;
         }
@@ -183,7 +188,7 @@ pub struct InitUploadResponse {
 }
 
 #[instrument(skip(state, req))]
-pub(crate) async fn entry_upload_init_handler(
+pub(crate) async fn upload_init_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::Json(req): axum::Json<InitUploadRequest>,
 ) -> impl IntoResponse {
@@ -319,7 +324,7 @@ pub struct UploadStatusResponse {
 }
 
 #[instrument(skip(state))]
-pub(crate) async fn entry_upload_status_handler(
+pub(crate) async fn upload_status_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(upload_id): axum::extract::Path<String>,
 ) -> impl IntoResponse {
@@ -357,7 +362,7 @@ pub struct UploadChunkResponse {
 }
 
 #[instrument(skip(state, body), fields(upload_id = %upload_id, index = index))]
-pub(crate) async fn entry_upload_chunk_handler(
+pub(crate) async fn upload_chunk_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path((upload_id, index)): axum::extract::Path<(String, u64)>,
     body: axum::body::Bytes,
@@ -443,7 +448,8 @@ fn merge_chunks(
 ) -> Result<u64, String> {
     use std::io::{BufReader, BufWriter, Read, Write};
 
-    let out = std::fs::File::create(merging_path).map_err(|e| format!("create merging file: {e}"))?;
+    let out =
+        std::fs::File::create(merging_path).map_err(|e| format!("create merging file: {e}"))?;
     let mut writer = BufWriter::with_capacity(1024 * 1024, out);
     let mut hasher = meta.file_hash.as_ref().map(|_| Sha256::new());
     let mut buf = vec![0u8; 256 * 1024];
@@ -507,13 +513,15 @@ async fn finalize_upload(
         .await
         .map_err(|e| e.into_response())?;
     if (uploaded.len() as u64) < total_chunks {
-        let missing: Vec<u64> = (0..total_chunks).filter(|i| !uploaded.contains(i)).collect();
-        return Err(
-            ApiResponse::error_with_data(StatusCode::BAD_REQUEST, "missing chunks", MissingChunks {
-                missing,
-            })
-            .into_response(),
-        );
+        let missing: Vec<u64> = (0..total_chunks)
+            .filter(|i| !uploaded.contains(i))
+            .collect();
+        return Err(ApiResponse::error_with_data(
+            StatusCode::BAD_REQUEST,
+            "missing chunks",
+            MissingChunks { missing },
+        )
+        .into_response());
     }
 
     let target_dir = resolve_and_validate_path(&state.config.data_dir, &meta.target_dir)
@@ -533,35 +541,35 @@ async fn finalize_upload(
     let session_dir = dir.to_path_buf();
     let meta_owned = meta.clone();
     let merging_arg = merging_path.clone();
-    let written =
-        match tokio::task::spawn_blocking(move || merge_chunks(&session_dir, &meta_owned, &merging_arg))
-            .await
-        {
-            Ok(Ok(n)) => n,
-            Ok(Err(msg)) => {
-                error!("merge chunks failed: {msg}");
-                let _ = tokio::fs::remove_file(&merging_path).await;
-                return Err(ApiResponse::error(StatusCode::CONFLICT, msg).into_response());
-            }
-            Err(e) => {
-                error!("merge task failed: {e}");
-                let _ = tokio::fs::remove_file(&merging_path).await;
-                return Err(ApiResponse::error(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "failed to merge chunks",
-                )
-                .into_response());
-            }
-        };
+    let written = match tokio::task::spawn_blocking(move || {
+        merge_chunks(&session_dir, &meta_owned, &merging_arg)
+    })
+    .await
+    {
+        Ok(Ok(n)) => n,
+        Ok(Err(msg)) => {
+            error!("merge chunks failed: {msg}");
+            let _ = tokio::fs::remove_file(&merging_path).await;
+            return Err(ApiResponse::error(StatusCode::CONFLICT, msg).into_response());
+        }
+        Err(e) => {
+            error!("merge task failed: {e}");
+            let _ = tokio::fs::remove_file(&merging_path).await;
+            return Err(ApiResponse::error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to merge chunks",
+            )
+            .into_response());
+        }
+    };
 
     if let Err(e) = tokio::fs::rename(&merging_path, &final_path).await {
         error!("commit merged file failed: {e}");
         let _ = tokio::fs::remove_file(&merging_path).await;
-        return Err(ApiResponse::error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "failed to commit file",
-        )
-        .into_response());
+        return Err(
+            ApiResponse::error(StatusCode::INTERNAL_SERVER_ERROR, "failed to commit file")
+                .into_response(),
+        );
     }
 
     info!("upload merged: {} ({written} bytes)", final_path.display());
@@ -577,7 +585,7 @@ async fn finalize_upload(
 }
 
 #[instrument(skip(state), fields(upload_id = %upload_id))]
-pub(crate) async fn entry_upload_complete_handler(
+pub(crate) async fn upload_complete_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(upload_id): axum::extract::Path<String>,
 ) -> impl IntoResponse {
@@ -618,7 +626,7 @@ pub(crate) async fn entry_upload_complete_handler(
 }
 
 #[instrument(skip(state))]
-pub(crate) async fn entry_upload_cancel_handler(
+pub(crate) async fn upload_cancel_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(upload_id): axum::extract::Path<String>,
 ) -> impl IntoResponse {

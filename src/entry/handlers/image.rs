@@ -19,7 +19,7 @@ pub struct ImageStreamQuery {
 }
 
 #[instrument(skip(state, request))]
-pub(crate) async fn entry_image_stream_handler(
+pub(crate) async fn image_stream_handler(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(path): axum::extract::Path<String>,
     axum::extract::Query(query): axum::extract::Query<ImageStreamQuery>,
@@ -59,7 +59,7 @@ pub(crate) async fn entry_image_stream_handler(
 }
 
 #[instrument]
-pub(crate) async fn entry_image_url_handler(
+pub(crate) async fn image_url_handler(
     axum::extract::Path(path): axum::extract::Path<String>,
     payload: AuthPayload,
 ) -> impl IntoResponse {
@@ -67,12 +67,7 @@ pub(crate) async fn entry_image_url_handler(
     if !has_permission {
         return ApiResponse::error(StatusCode::FORBIDDEN, "no permission").into_response();
     }
-    let image_url = generate_signed_url(
-        path.as_str(),
-        &payload.claims.sub,
-        IMAGE_URL_SECRET,
-        600,
-    );
+    let image_url = generate_signed_url(path.as_str(), &payload.claims.sub, IMAGE_URL_SECRET, 600);
     info!("{image_url}");
     ApiResponse::success(image_url).into_response()
 }
