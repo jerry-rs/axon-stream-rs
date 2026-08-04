@@ -10,7 +10,7 @@ use axum::{Router, middleware};
 use std::time::Duration;
 use tracing::Span;
 #[derive(rust_embed::Embed)]
-#[folder = "dist/"]
+#[folder = "web/dist"]
 struct Assets;
 
 // 静态资源及 SPA 路由兜底处理器
